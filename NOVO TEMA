@@ -1,0 +1,247 @@
+relogio-digital/
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   └── types/
+│   ├── package.json
+│   └── tsconfig.json
+│
+├── backend/
+│   ├── shopify/
+│   │   ├── webhooks/
+│   │   ├── scripts/
+│   │   └── config/
+│   └── package.json
+│
+└── README.md
+import Client from 'shopify-buy';
+
+class ShopifyService {
+  private client: any;
+
+  constructor() {
+    this.client = Client.buildClient({
+      domain: process.env.REACT_APP_SHOPIFY_DOMAIN!,
+      storefrontAccessToken: process.env.REACT_APP_SHOPIFY_STOREFRONT_TOKEN!
+    });
+  }
+
+  async fetchProdutos() {
+    try {
+      const produtos = await this.client.product.fetchAll();
+      return produtos.map(this.formatarProduto);
+    } catch (error) {
+      console.error('Erro ao buscar produtos:', error);
+      return [];
+    }
+  }
+
+  async fetchProdutoPorId(id: string) {
+    try {
+      const produto = await this.client.product.fetch(id);
+      return this.formatarProduto(produto);
+    } catch (error) {
+      console.error('Erro ao buscar produto:', error);
+      return null;
+    }
+  }
+
+  private formatarProduto(produto: any) {
+    return {
+      id: produto.id,
+      nome: produto.title,
+      descricao: produto.description,
+      preco: produto.variants[0].price,
+      imagens: produto.images.map((img: any) => img.src),
+      variacoes: produto.variants
+    };
+  }
+
+  async criarCheckout(produtos: any[]) {
+    try {
+      const checkout = await this.client.checkout.create();
+      
+      const lineItemsToAdd = produtos.map(produto => ({
+        variantId: produto.variantId,
+        quantity: produto.quantidade
+      }));
+
+      await this.client.checkout.addLineItems(checkout.id, lineItemsToAdd);
+      
+      return checkout.webUrl;
+    } catch (error) {
+      console.error('Erro no checkout:', error);
+      return null;
+    }
+  }
+}
+
+export default new ShopifyService();
+const express = require('express');
+const crypto = require('crypto');
+const Shopify = require('@shopify/shopify-api');
+
+const router = express.Router();
+
+router.post('/produto', async (req, res) => {
+  const hmac = req.get('X-Shopify-Hmac-Sha256');
+  const body = req.body;
+  const generatedHash = crypto
+    .createHmac('sha256', process.env.SHOPIFY_WEBHOOK_SECRET)
+    .update(JSON.stringify(body), 'utf8', 'hex')
+    .digest('base64');
+
+  if (generatedHash === hmac) {
+    // Webhook válido
+    switch(body.type) {
+      case 'product/create':
+        await handleProdutoCriado(body.product);
+        break;
+      case 'product/update':
+        await handleProdutoAtualizado(body.product);
+        break;
+      case 'product/delete':
+        await handleProdutoDeletado(body.product);
+        break;
+    }
+    
+    res.sendStatus(200);
+  } else {
+    res.sendStatus(403);
+  }
+});
+
+async function handleProdutoCriado(produto) {
+  // Lógica para novo produto
+  console.log('Novo produto:', produto.title);
+}
+
+async function handleProdutoAtualizado(produto) {
+  // Lógica para atualização de produto
+  console.log('Produto atualizado:', produto.title);
+}
+
+async function handleProdutoDeletado(produto) {
+  // Lógica para remoção de produto
+  console.log('Produto removido:', produto.title);
+}
+
+module.exports = router;
+const Shopify = require('@shopify/shopify-api');
+
+async function sincronizarProdutos() {
+  const shopify = new Shopify.Clients.Rest(
+    process.env.SHOPIFY_SHOP, 
+    process.env.SHOPIFY_ACCESS_TOKEN
+  );
+
+  const produtos = [
+    {
+      nome: 'T800 Ultra Smartwatch',
+      descricao: 'Smartwatch premium com monitoramento avançado',
+      preco: '499.90',
+      tipo: 'Smartwatch',
+      tags: ['tecnologia', 'saúde']
+    },
+    // Adicionar outros produtos
+  ];
+
+  for (let produto of produtos) {
+    try {
+      await shopify.product.create({
+        product: {
+          title: produto.nome,
+          body_html: produto.descricao,
+          vendor: 'RelogioDigital',
+          product_type: produto.tipo,
+          tags: produto.tags,
+          variants: [{
+            price: produto.preco
+          }]
+        }
+      });
+      console.log(`Produto ${produto.nome} sincronizado`);
+    } catch (error) {
+      console.error(`Erro ao sincronizar ${produto.nome}:`, error);
+    }
+  }
+}
+
+sincronizarProdutos();
+require('dotenv').config();
+const Shopify = require('@shopify/shopify-api');
+
+class ShopifyConfig {
+  constructor() {
+    Shopify.Context.initialize({
+      API_KEY: process.env.SHOPIFY_API_KEY,
+      API_SECRET_KEY: process.env.SHOPIFY_API_SECRET,
+      SCOPES: ['read_products', 'write_products'],
+      HOST_NAME: process.env.SHOPIFY_APP_URL.replace(/https:\/\//, ''),
+      IS_EMBEDDED_APP: false,
+      API_VERSION: '2023-04'
+    });
+  }
+
+  async iniciarInstalacao(shop) {
+    const authRoute = await Shopify.Auth.beginAuth(
+      shop, 
+      '/auth/callback', 
+      'online'
+    );
+    return authRoute;
+  }
+
+  async finalizarInstalacao(shop, code) {
+    const tokenResponse = await Shopify.Auth.validateAuthCallback(
+      shop, 
+      code
+    );
+    return tokenResponse;
+  }
+}
+
+module.exports = new ShopifyConfig();
+{
+  "name": "relogio-digital-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "shopify-sync": "node ../backend/shopify/scripts/sync-produtos.js"
+  },
+  "dependencies": {
+    "@shopify/shopify-api": "^7.0.0",
+    "shopify-buy": "^2.11.0",
+    "react": "^18.2.0",
+    "typescript": "^4.9.5"
+  }
+}
+{
+  "name": "relogio-digital-backend",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js",
+    "webhook": "node shopify/webhooks/produto.js",
+    "sync-produtos": "node shopify/scripts/sync-produtos.js"
+  },
+  "dependencies": {
+    "@shopify/shopify-api": "^7.0.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.0.3"
+  }
+}
+# Shopify Credenciais
+SHOPIFY_API_KEY=seu_api_key
+SHOPIFY_API_SECRET=seu_api_secret
+SHOPIFY_ACCESS_TOKEN=seu_access_token
+SHOPIFY_SHOP=seu_shop.myshopify.com
+SHOPIFY_WEBHOOK_SECRET=seu_webhook_secret
+
+# Frontend
+REACT_APP_SHOPIFY_DOMAIN=seu_shop.myshopify.com
+REACT_APP_SHOPIFY_STOREFRONT_TOKEN=seu_storefront_token

@@ -1,0 +1,201 @@
+📦 relogio-digital.zip
+
+relogio-digital/
+│
+├── frontend/
+│   ├── public/
+│   │   └── index.html
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Header.tsx
+│   │   │   ├── Footer.tsx
+│   │   │   ├── ProductCard.tsx
+│   │   │   ├── SearchFilter.tsx
+│   │   │   ├── CarrinhoModal.tsx
+│   │   │   └── NotificacaoPromocao.tsx
+│   │   ├── pages/
+│   │   │   ├── Home.tsx
+│   │   │   ├── Produtos.tsx
+│   │   │   ├── ProdutoDetalhe.tsx
+│   │   │   ├── Carrinho.tsx
+│   │   │   ├── Checkout.tsx
+│   │   │   ├── Conta.tsx
+│   │   │   └── Login.tsx
+│   │   ├── context/
+│   │   │   ├── CarrinhoContext.tsx
+│   │   │   ├── AuthContext.tsx
+│   │   │   └── NotificacaoContext.tsx
+│   │   ├── services/
+│   │   │   ├── shopify.ts
+│   │   │   ├── supabase.ts
+│   │   │   └── notificacoes.ts
+│   │   ├── utils/
+│   │   │   └── formatadores.ts
+│   │   ├── App.tsx
+│   │   ├── index.tsx
+│   │   └── styles.css
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── tailwind.config.js
+│
+├── backend/
+│   ├── supabase/
+│   │   ├── migrations/
+│   │   │   └── initial_schema.sql
+│   │   └── functions/
+│   │       └── notificacoes.ts
+│   └── shopify-webhooks/
+│       └── produto-sync.js
+│
+└── README.md
+Conteúdo dos arquivos principais:
+
+📄 frontend/package.json
+
+{
+  "name": "relogio-digital",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "dependencies": {
+    "@shopify/shopify-api": "^6.0.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.10.0",
+    "tailwindcss": "^3.3.2",
+    "typescript": "^4.9.5"
+  }
+}
+📄 frontend/src/App.tsx
+
+import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { CarrinhoProvider } from './context/CarrinhoContext';
+import { NotificacaoProvider } from './context/NotificacaoContext';
+
+import Header from './components/Header';
+import Footer from './components/Footer';
+import Home from './pages/Home';
+import Produtos from './pages/Produtos';
+import ProdutoDetalhe from './pages/ProdutoDetalhe';
+import Carrinho from './pages/Carrinho';
+import Checkout from './pages/Checkout';
+import Conta from './pages/Conta';
+
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <CarrinhoProvider>
+        <NotificacaoProvider>
+          <BrowserRouter>
+            <div className="flex flex-col min-h-screen">
+              <Header />
+              <main className="flex-grow">
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/produtos" element={<Produtos />} />
+                  <Route path="/produto/:id" element={<ProdutoDetalhe />} />
+                  <Route path="/carrinho" element={<Carrinho />} />
+                  <Route path="/checkout" element={<Checkout />} />
+                  <Route path="/conta" element={<Conta />} />
+                </Routes>
+              </main>
+              <Footer />
+            </div>
+          </BrowserRouter>
+        </NotificacaoProvider>
+      </CarrinhoProvider>
+    </AuthProvider>
+  );
+}
+
+export default App;
+📄 backend/supabase/migrations/initial_schema.sql
+
+-- Criação da tabela de usuários
+CREATE TABLE usuarios (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nome TEXT,
+  email TEXT UNIQUE NOT NULL,
+  senha TEXT NOT NULL,
+  endereco TEXT,
+  telefone TEXT,
+  criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Criação da tabela de produtos
+CREATE TABLE produtos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nome TEXT NOT NULL,
+  descricao TEXT,
+  preco NUMERIC(10,2) NOT NULL,
+  categoria TEXT,
+  imagem TEXT,
+  estoque INTEGER
+);
+
+-- Criação da tabela de pedidos
+CREATE TABLE pedidos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  usuario_id UUID REFERENCES usuarios(id),
+  data TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  total NUMERIC(10,2) NOT NULL,
+  status TEXT DEFAULT 'pendente'
+);
+📄 README.md
+
+# RelogioDigital
+
+## Descrição
+Plataforma de e-commerce de smartwatches com foco em autoestima e tecnologia.
+
+## Tecnologias
+- Frontend: React + TypeScript
+- Backend: Supabase
+- E-commerce: Shopify
+- Estilo: Tailwind CSS
+
+## Instalação
+1. Clone o repositório
+2. Instale as dependências
+3. Configure as variáveis de ambiente
+4. Inicie o projeto
+
+## Funcionalidades
+- Catálogo de produtos
+- Filtros avançados
+- Carrinho de compras
+- Autenticação de usuário
+- Notificações de promoção
+📄 backend/shopify-webhooks/produto-sync.js
+
+const ShopifyAPI = require('@shopify/shopify-api');
+
+async function sincronizarProdutos(produtos) {
+  const shopify = new ShopifyAPI.Clients.Rest(
+    process.env.SHOPIFY_SHOP, 
+    process.env.SHOPIFY_ACCESS_TOKEN
+  );
+
+  for (let produto of produtos) {
+    await shopify.product.create({
+      product: {
+        title: produto.nome,
+        body_html: produto.descricao,
+        vendor: produto.marca,
+        product_type: 'Smartwatch',
+        variants: [{
+          price: produto.preco.toString()
+        }]
+      }
+    });
+  }
+}
+
+module.exports = { sincronizarProdutos };
